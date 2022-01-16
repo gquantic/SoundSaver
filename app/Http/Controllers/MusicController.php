@@ -30,7 +30,7 @@ class MusicController extends Controller
 
     public function create($content)
     {
-        $composer = $this->composerController->search($content['music'][1]);
+        $composer = $this->composerController->search($content['real_name']);
         if (!Music::where('composer', $composer)->where('name', $content['music'][0])->exists()) {
             DB::table('music')->insert([
                 'composer' => $composer,

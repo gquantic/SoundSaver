@@ -44,11 +44,11 @@ class ComposerController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function create($composer)
+    public function create($realName, $composer)
     {
-        if (!Composer::where('name', $composer)->exists()) {
+        if (!Composer::where('name', $realName)->exists()) {
             DB::table('composers')->insert([
-                'name' => $composer,
+                'name' => $realName,
                 'city' => $this->composerParse->initComposerSearch($composer)[0],
             ]);
         }

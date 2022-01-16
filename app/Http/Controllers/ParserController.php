@@ -61,6 +61,7 @@ class ParserController extends Controller
 
         foreach ($content as $item) {
             $music = explode('by', $item->children('h2.name a')[1]->text());
+            $realName = $music[1];
 
             /**
              * Read composer name
@@ -80,11 +81,12 @@ class ParserController extends Controller
                 'music' => $music,
                 'duration' => $this->getMusicContinue($music),
                 'comments' => $this->getMusicComments($music),
+                'real_name' => $realName,
             ];
         }
 
         foreach ($this->results as $item) {
-            $composerController->create($item['music'][1]);
+            $composerController->create($realName, $item['music'][1]);
             $musicController->create($item);
         }
     }

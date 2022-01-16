@@ -7,3 +7,5 @@
 </p>
 
 ## О проекте
+
+Код парсера хранится в ComposerParseController.php 
