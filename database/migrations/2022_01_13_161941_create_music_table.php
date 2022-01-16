@@ -22,10 +22,12 @@ class CreateMusicTable extends Migration
             $table->unsignedBigInteger('composer');
             $table->foreign('composer')->references('id')->on('composers');
 
-            $table->integer('listens');
-            $table->integer('comments');
+            $table->string('name')->nullable();
 
-            $table->time('duration');
+            $table->integer('listens')->nullable();
+            $table->string('comments')->nullable();
+
+            $table->string('duration')->nullable();
 
             $table->timestamps();
         });

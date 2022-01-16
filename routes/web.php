@@ -1,7 +1,9 @@
 <?php
 
-use App\Http\Controllers\ParserController;
+use App\Http\Controllers\ComposerController;
+use App\Http\Controllers\MusicController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Request;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,19 +19,23 @@ use Illuminate\Support\Facades\Route;
 /**
  * Redirect home route to resource view
  */
-Route::redirect('/', 'music/index');
+Route::get('/', function () {
+    return view('music.index', ['composers' => \App\Models\Composer::all()]);
+});
 
 /**
  * Routes for resource controllers
  */
 Route::resources([
-    'music' => \App\Http\Controllers\MusicController::class,
-    'compositor' => \App\Http\Controllers\ComposerController::class,
+    'music' => MusicController::class,
+    'compositor' => ComposerController::class,
 ]);
 
-/**
- * Routes for test
- */
-Route::get('/urlExecute', function (ParserController $parser) {
-    return $parser->init('https://soundcloud.com/lakeyinspired/tracks');
+Route::view('/form', 'parse.form');
+
+Route::post('/parse/url', function (MusicController $musicController, ComposerController $composerController) {
+    $parserController = new \App\Http\Controllers\ParserController;
+    $parserController->init($_POST['url'], $composerController, $musicController);
+
+    return redirect('/')->with('success', 'Вы успешно спарсили песни.');
 });

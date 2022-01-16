@@ -3,11 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\Composer;
-use App\Http\Requests\StoreComposerRequest;
-use App\Http\Requests\UpdateComposerRequest;
+use App\Models\Music;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\Console\Helper\Table;
+use App\Http\Controllers\ComposerParseController;
 
 class ComposerController extends Controller
 {
+    public function __construct()
+    {
+        $this->composerParse = new ComposerParseController();
+    }
+
     /**
      * Display a listing of the resource.
      *
@@ -18,69 +25,32 @@ class ComposerController extends Controller
         //
     }
 
-    /**
-     * Show the form for creating a new resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
+    public function show($id)
     {
-        //
+        $compositor = Composer::where('id', $id)->first();
+        $musics = Music::where('composer', $id)->get();
+
+        return view('compositor.show', compact('compositor', 'musics'));
+    }
+
+    public function search($name)
+    {
+        $composer = Composer::where('name', $name)->first();
+        return $composer->id;
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Create a new resource.
      *
-     * @param  \App\Http\Requests\StoreComposerRequest  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(StoreComposerRequest $request)
+    public function create($composer)
     {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\Composer  $composer
-     * @return \Illuminate\Http\Response
-     */
-    public function show(Composer $composer)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  \App\Models\Composer  $composer
-     * @return \Illuminate\Http\Response
-     */
-    public function edit(Composer $composer)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \App\Http\Requests\UpdateComposerRequest  $request
-     * @param  \App\Models\Composer  $composer
-     * @return \Illuminate\Http\Response
-     */
-    public function update(UpdateComposerRequest $request, Composer $composer)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\Composer  $composer
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy(Composer $composer)
-    {
-        //
+        if (!Composer::where('name', $composer)->exists()) {
+            DB::table('composers')->insert([
+                'name' => $composer,
+                'city' => $this->composerParse->initComposerSearch($composer)[0],
+            ]);
+        }
     }
 }

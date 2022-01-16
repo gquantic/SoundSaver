@@ -17,6 +17,7 @@ class CreateComposersTable extends Migration
             $table->id();
 
             $table->string('name');
+            $table->string('city')->nullable();
 
             $table->timestamps();
         });

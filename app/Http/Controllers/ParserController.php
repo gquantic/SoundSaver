@@ -2,20 +2,43 @@
 
 namespace App\Http\Controllers;
 
+use DiDom\Exceptions\InvalidSelectorException;
+use DiDom\Query;
 use http\Header\Parser;
 use Illuminate\Http\Request;
 use JetBrains\PhpStorm\NoReturn;
 use Symfony\Component\DomCrawler\Crawler;
 use App\Http\Controllers\MusicController;
 use App\Http\Controllers\ComposerController;
+use DiDom\Document;
+use App\Models\Music;
+
+/**
+ * Для написания использовался пакет DiDOM
+ * https://github.com/Imangazaliev/DiDOM.git
+ */
 
 class ParserController extends Controller
 {
-    private array $results = array();
+    /**
+     * Массив для хранения результатов
+     * @var array
+     */
+    protected array $results = array();
 
     protected int $maxMusicForImport = 20;
-    protected string $serviceUrl = 'https://soundcloud.com/';
 
+    /**
+     * URL сервиса
+     */
+    protected string $serviceUrl = 'https://soundcloud.com';
+
+    /**
+     * Установить лимит песен для парсинга
+     *
+     * @param $max
+     * @return string
+     */
     public function setMaxMusicsForImport($max): string
     {
         if ($max > 50) {
@@ -26,95 +49,134 @@ class ParserController extends Controller
     }
 
     /**
-     * Get the music and composer information
+     * Инициализация парсинга
+     *
      * @param $url
-     * @return void
+     * @return \Illuminate\Contracts\Foundation\Application|\Illuminate\Http\RedirectResponse|\Illuminate\Routing\Redirector
+     * @throws InvalidSelectorException
      */
-    public function init($url)
+    public function init($url, ComposerController $composerController, MusicController $musicController)
     {
         $content = $this->getContentFromPage($url, 'section > article', 'h2');
 
         foreach ($content as $item) {
-            $musics[] = explode('by', $item['result']);
+            $music = explode('by', $item->children('h2.name a')[1]->text());
+
+            /**
+             * Read composer name
+             */
+            $composer = substr($url, 23);
+            $composer = substr($composer, 0, strpos($composer, '/'));
+
+            /**
+             * Read array
+             */
+            $music = [
+                $music[0],
+                $composer,
+            ];
+
+            $this->results[] = [
+                'music' => $music,
+                'duration' => $this->getMusicContinue($music),
+                'comments' => $this->getMusicComments($music),
+            ];
         }
+
+        foreach ($this->results as $item) {
+            $composerController->create($item['music'][1]);
+            $musicController->create($item);
+        }
+    }
+
+    /**
+     * Вытаскиваем число комментариев под музыкой
+     *
+     * @param $music
+     * @return string
+     * @throws InvalidSelectorException
+     */
+    private function getMusicComments($music): string
+    {
+        /**
+         * Массив для комментариев
+         */
+        $comments = [];
 
         /**
-         * For the next, we keep the items and parse other info
+         * Получаем комментарии
          */
-        foreach ($musics as $item) {
-            /**
-             * Get the music duration
-             */
-            if ($item[0] != null && $item[1] != null) {
-                $this->results[] = [
-                    $item,
-                    $this->getMusicContinue($item)
-                ];
-            }
+        $comments = $this->getContentFromPage($this->prepareUrlForParse($music), 'section.comments');
+
+        if ($comments == null) {
+            return "Not found";
         }
 
-        dd($this->results);
+        return count($comments[0]->children('h2'));
     }
 
     /**
      * @param $music
-     * @return array
+     * @return string
+     * @throws InvalidSelectorException
      */
-    private function getMusicContinue($music)
+    private function getMusicContinue($music): string
     {
+        /**
+         * Получаем и форматируем длительность трека
+         * Вид: PT00H01M47S
+         */
+        if ($this->getContentFromPage($this->prepareUrlForParse($music), 'meta[itemprop="duration"]') == null) {
+            return "Not found";
+        }
+
+        $duration = $this->getContentFromPage($this->prepareUrlForParse($music), 'meta[itemprop="duration"]')[0]->attr('content');
+        return substr(str_replace(['M', 'S'],  [':', ''], $duration), 5);
+    }
+
+    /**
+     * Подготовка ссылки для парсинга
+     *
+     * @param $music
+     * @return string
+     */
+    protected function prepareUrlForParse($music): string
+    {
+        /**
+         * Готовим запрос
+         */
         $composer = strtolower(str_replace(' ', '', $music[1]));
 
         $music = strtolower(str_replace(' ', '-', $music[0]));
         $music = str_replace('(', '-', $music);
         $music = str_replace(')', '-', $music);
         $music = str_replace('--', '-', $music);
-        $music = str_replace('.', '', $music);
+        $music = str_replace(['.', "'"], '', $music);
+        $music = str_replace('--', '-', $music);
+
         $music = substr($music, 0, -1);
 
-        $url = $this->serviceUrl.$composer."/".$music;
+        if (str_ends_with($music, '-')) {
+            $music = substr($music, 0, -1);
+        }
 
-        $this->getContentFromPage($url, 'span.sc-visuallyhidden', null, false);
+        /**
+         * Возвращаем итоговую ссылка вида https://soundcloud.com/ИСПОЛНИТЕЛЬ/МУЗЫКА
+         */
+        return "$this->serviceUrl/$composer/$music";
     }
 
     /**
-     * Parse elements from url of page
+     * Получаем элементы из страницы
      *
-     * @param $url
+     * @param $url - Ссылка на страницу
+     * @param $element - Сам элемент
      * @return array
+     * @throws InvalidSelectorException
      */
-    private function getContentFromPage($url, $selector = 'section > article', $thirdElement = null, $array = true)
+    protected function getContentFromPage($url, $element): array
     {
-        /**
-         * Get html remote text
-         */
-        $html = file_get_contents($url);
-
-        /**
-         * Create new instance for parser
-         */
-        $crawler = new Crawler(null, $url);
-        $crawler->addHtmlContent($html, 'UTF-8');
-
-        if ($array == true) {
-            $crawler->filter($selector)->each(function ($item) use ($thirdElement) {
-                if ($thirdElement != null) {
-                    $this->results[] = [
-                        'result' => $item->filter($thirdElement)->text(),
-                    ];
-                } else {
-                    $this->results[] = [
-                        'result' => $item->text(),
-                    ];
-                }
-            });
-        } else {
-            dd($crawler->filter($selector));
-        }
-
-        echo "<pre>";
-        var_dump($this->results);
-        echo "</pre>";
-
-        return $this->results;
+        $document = new Document($url, true);
+        return $document->find($element);
     }
 }
